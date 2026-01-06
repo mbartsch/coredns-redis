@@ -21,6 +21,7 @@ type Redis struct {
 	Pool           *redisCon.Pool
 	redisAddress   string
 	redisPassword  string
+	redisDB        uint32
 	connectTimeout int
 	readTimeout    int
 	keyPrefix      string
@@ -34,26 +35,27 @@ type Redis struct {
 func (redis *Redis) KeyCount() int {
 	var (
 		reply interface{}
-		err error
+		err   error
 	)
 	conn := redis.Pool.Get()
 	if conn == nil {
 		log.Error("error connecting to redis")
-		return -1;
+		return -1
 	}
 	defer conn.Close()
 	reply, err = conn.Do("DBSIZE")
 	if err != nil {
 		log.Error("error getting dbsize from redis:", err)
-		return -1;
+		return -1
 	}
 	dbsize, err := redisCon.Int(reply, nil)
 	if err != nil {
 		log.Error("error parsing dbsize:", err)
-		 return -1
+		return -1
 	}
-	return dbsize;
-} 
+	return dbsize
+}
+
 type RedisScanReply struct {
 	cursor int
 	keys   []string
@@ -510,6 +512,9 @@ func (redis *Redis) Connect() {
 			if redis.readTimeout != 0 {
 				opts = append(opts, redisCon.DialReadTimeout(time.Duration(redis.readTimeout)*time.Millisecond))
 			}
+			if redis.redisDB != 0 {
+				opts = append(opts, redisCon.DialDatabase(int(redis.redisDB)))
+			}
 
 			return redisCon.Dial("tcp", redis.redisAddress, opts...)
 		},
@@ -613,6 +618,7 @@ func split255(s string) []string {
 
 const (
 	defaultTtl     = 360
+	defaultDB      = 0
 	hostmaster     = "hostmaster"
 	zoneUpdateTime = 10 * time.Minute
 	transferLength = 1000
