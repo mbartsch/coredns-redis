@@ -18,6 +18,7 @@ func init() {
 func setup(c *caddy.Controller) error {
 	r, err := redisParse(c)
 	if err != nil {
+		log.Error(err)
 		return plugin.Error("redis", err)
 	}
 
@@ -40,81 +41,79 @@ func redisParse(c *caddy.Controller) (*Redis, error) {
 	)
 
 	for c.Next() {
+		c.RemainingArgs() // consume optional inline args (e.g. zone name) before the block
 		if c.NextBlock() {
 			for {
 				switch c.Val() {
-				case "address":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
+					case "address":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.redisAddress = c.Val()
+					case "password":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.redisPassword = c.Val()
+					case "database":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						var val int
+						val, err = strconv.Atoi(c.Val())
+						if err != nil {
+							val = defaultDatabase
+						}
+						redis.redisDatabase = uint32(val)
+					case "prefix":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.keyPrefix = c.Val()
+					case "suffix":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.keySuffix = c.Val()
+					case "connect_timeout":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.connectTimeout, err = strconv.Atoi(c.Val())
+						if err != nil {
+							redis.connectTimeout = 0
+						}
+					case "read_timeout":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						redis.readTimeout, err = strconv.Atoi(c.Val())
+						if err != nil {
+							redis.readTimeout = 0
+						}
+					case "ttl":
+						if !c.NextArg() {
+							return &Redis{}, c.ArgErr()
+						}
+						var val int
+						val, err = strconv.Atoi(c.Val())
+						if err != nil {
+							val = defaultTtl
+						}
+						redis.Ttl = uint32(val)
+					default:
+						if c.Val() != "}" {
+							return &Redis{}, c.Errf("unknown property '%s'", c.Val())
+						}
 					}
-					redis.redisAddress = c.Val()
-				case "password":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					redis.redisPassword = c.Val()
-				case "database":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					var val int
-					val, err = strconv.Atoi(c.Val())
-					if err != nil {
-						val = defaultDatabase
-					}
-					redis.redisDatabase = uint32(val)
-				case "prefix":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					redis.keyPrefix = c.Val()
-				case "suffix":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					redis.keySuffix = c.Val()
-				case "connect_timeout":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					redis.connectTimeout, err = strconv.Atoi(c.Val())
-					if err != nil {
-						redis.connectTimeout = 0
-					}
-				case "read_timeout":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					redis.readTimeout, err = strconv.Atoi(c.Val())
-					if err != nil {
-						redis.readTimeout = 0
-					}
-				case "ttl":
-					if !c.NextArg() {
-						return &Redis{}, c.ArgErr()
-					}
-					var val int
-					val, err = strconv.Atoi(c.Val())
-					if err != nil {
-						val = defaultTtl
-					}
-					redis.Ttl = uint32(val)
-				default:
-					if c.Val() != "}" {
-						return &Redis{}, c.Errf("unknown property '%s'", c.Val())
+
+					if !c.Next() {
+						break
 					}
 				}
-
-				if !c.Next() {
-					break
-				}
-			}
-
 		}
-
 		redis.Connect()
 		redis.LoadZones()
-
 		return &redis, nil
 	}
 	return &Redis{}, nil
